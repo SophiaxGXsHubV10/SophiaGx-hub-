@@ -1,4 +1,4 @@
-local texto = "bailão"
+local texto = "bailão hgy"
 
 if setclipboard then
     setclipboard(texto)
