@@ -1,4 +1,4 @@
-local texto = "QuantumOnyx-.h87hnGmxQ2nc5cQ3kxG0W0LALQ4BnhA2nQ6G7L9BZW2Wn36mF2G4DnQnY0R0vjQBLhcQLhBh0660553B2hh8njQWQ."
+local texto = "QuantumOnyx-.389hnGmnQ2Bc4LQx9350W0cAL24c4hBmnQ6G7A9BZW2Wn369F2WBhnQZY0R0kBRjL3c9LhkFm66npL3BRhZhncmnQ"
 
 if setclipboard then
     setclipboard(texto)
