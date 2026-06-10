@@ -1,0 +1,160 @@
+-- COOK OR DIE: GENERAL INSANO V3 (SLIM EDITION - MAXIMUM OVERCLOCK) >-<
+local LP = game:GetService("Players").LocalPlayer
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+local ZAP
+pcall(function() ZAP = require(game:GetService("ReplicatedStorage").Client.ClientRemotes) end)
+
+if LP.PlayerGui:FindFirstChild("CookDieGod") then LP.PlayerGui.CookDieGod:Destroy() end
+
+local sg = Instance.new("ScreenGui", LP.PlayerGui)
+sg.Name = "CookDieGod"
+sg.ResetOnSpawn = false
+
+-- GUI REDUZIDA (Tamanho menor: 180x280)
+local main = Instance.new("Frame", sg)
+main.Size = UDim2.new(0, 180, 0, 280) 
+main.Position = UDim2.new(0.05, 0, 0.2, 0)
+main.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+main.Active = true 
+Instance.new("UICorner", main)
+
+-- ARRASTAR
+local dragToggle, dragStart, startPos
+main.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragToggle, dragStart, startPos = true, input.Position, main.Position
+    end
+end)
+UserInputService.InputChanged:Connect(function(input)
+    if dragToggle and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - dragStart
+        main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+UserInputService.InputEnded:Connect(function(input) dragToggle = false end)
+
+local state = {
+    noclip = false,
+    killAura = false,
+    autoPullBodies = false
+}
+
+local function createToggle(text, pos, stateKey, colorOn)
+    local b = Instance.new("TextButton", main)
+    b.Size = UDim2.new(0.9, 0, 0, 35)
+    b.Position = pos
+    b.Text = text .. ": OFF"
+    b.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    b.TextColor3 = Color3.new(1, 1, 1)
+    b.Font = Enum.Font.GothamBold
+    b.TextSize = 10
+    Instance.new("UICorner", b)
+
+    b.MouseButton1Click:Connect(function()
+        state[stateKey] = not state[stateKey]
+        b.Text = state[stateKey] and (text .. ": ON") or (text .. ": OFF")
+        b.BackgroundColor3 = state[stateKey] and colorOn or Color3.fromRGB(40, 40, 40)
+    end)
+end
+
+-- BOTÕES
+local p1 = Instance.new("TextButton", main)
+p1.Size = UDim2.new(0.9, 0, 0, 35); p1.Position = UDim2.new(0.05, 0, 0.05, 0)
+p1.Text = "PUXAR TUDO"; p1.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+p1.TextColor3 = Color3.new(1, 1, 1); p1.Font = Enum.Font.GothamBold; p1.TextSize = 10
+Instance.new("UICorner", p1)
+p1.MouseButton1Click:Connect(function()
+    if workspace:FindFirstChild("Interactables") then
+        for _, v in pairs(workspace.Interactables:GetChildren()) do
+            if v:IsA("Model") and v.PrimaryPart then
+                v.PrimaryPart.CFrame = LP.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, -4)
+            end
+        end
+    end
+end)
+
+createToggle("PUXAR CORPOS", UDim2.new(0.05, 0, 0.22, 0), "autoPullBodies", Color3.fromRGB(0, 120, 200))
+createToggle("NOCLIP", UDim2.new(0.05, 0, 0.39, 0), "noclip", Color3.fromRGB(180, 130, 0))
+createToggle("KILL AURA", UDim2.new(0.05, 0, 0.56, 0), "killAura", Color3.fromRGB(180, 0, 0))
+
+local close = Instance.new("TextButton", main)
+close.Size = UDim2.new(0.9, 0, 0, 35); close.Position = UDim2.new(0.05, 0, 0.82, 0)
+close.Text = "FECHAR"; close.BackgroundColor3 = Color3.fromRGB(120, 0, 0)
+close.TextColor3 = Color3.new(1, 1, 1); Instance.new("UICorner", close)
+close.MouseButton1Click:Connect(function() sg:Destroy() end)
+
+-- DETECÇÃO OTIMIZADA
+local function obterMonstros()
+    local lista = {}
+    if workspace:FindFirstChild("Monsters") then
+        for _, m in pairs(workspace.Monsters:GetChildren()) do table.insert(lista, m) end
+    end
+    for _, v in pairs(workspace:GetChildren()) do
+        if v:IsA("Model") and v:FindFirstChild("Humanoid") and v.Name ~= LP.Name and not v:FindFirstChild("CarriedBy") then
+            table.insert(lista, v)
+        end
+    end
+    return lista
+end
+
+-- LOOP RENDERSTEPPED (Focado em Física e Hitbox)
+RunService.RenderStepped:Connect(function()
+    if not LP.Character or not LP.Character:FindFirstChild("HumanoidRootPart") then return end
+    local root = LP.Character.HumanoidRootPart
+
+    if state.autoPullBodies and workspace:FindFirstChild("Interactables") then
+        for _, v in pairs(workspace.Interactables:GetChildren()) do
+            if v:IsA("Model") and v:FindFirstChild("HumanoidRootPart") and not v:FindFirstChild("ProductPriceTag") then
+                v.HumanoidRootPart.CFrame = root.CFrame * CFrame.new(0, 0, -2.5)
+            end
+        end
+    end
+
+    local monstros = obterMonstros()
+    for _, m in pairs(monstros) do
+        local eRoot = m:FindFirstChild("HumanoidRootPart") or m:FindFirstChild("Torso")
+        if eRoot and eRoot:IsA("BasePart") then
+            local dist = (root.Position - eRoot.Position).Magnitude
+            if state.killAura and dist < 45 then
+                eRoot.Size = Vector3.new(25, 25, 25)
+                eRoot.Transparency = 0.7
+                eRoot.CanCollide = false
+            else
+                if eRoot.Size.X > 5 then 
+                    eRoot.Size = Vector3.new(2, 2, 1) 
+                    eRoot.Transparency = 1 
+                end
+            end
+        end
+    end
+
+    if state.noclip then
+        for _, v in pairs(LP.Character:GetDescendants()) do if v:IsA("BasePart") then v.CanCollide = false end end
+    end
+end)
+
+-- LOOP HEARTBEAT (Executa rajadas de eventos remotos acoplados aos frames físicos)
+RunService.Heartbeat:Connect(function()
+    if state.killAura and LP.Character and ZAP then
+        local root = LP.Character:FindFirstChild("HumanoidRootPart")
+        if root then
+            local monstros = obterMonstros()
+            for _, m in pairs(monstros) do
+                local eRoot = m:FindFirstChild("HumanoidRootPart") or m:FindFirstChild("Torso")
+                if eRoot then
+                    local dist = (root.Position - eRoot.Position).Magnitude
+                    if dist < 45 then
+                        -- Loop interno forçado: dispara o mesmo sinal 3 vezes consecutivas por frame físico
+                        for i = 1, 3 do
+                            pcall(function() ZAP.meleeAttack.fire({monsters = {m}, civilians = {}, activeSlot = 1}) end)
+                            pcall(function() ZAP.meleeAttack.fire({monsters = {m}, civilians = {}, activeSlot = 2}) end)
+                            pcall(function() ZAP.meleeAttack:FireServer({monsters = {m}, civilians = {}, activeSlot = 2}) end)
+                        end
+                    end
+                end
+            end
+        end
+    end
+end)
