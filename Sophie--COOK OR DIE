@@ -1,160 +1,390 @@
--- COOK OR DIE: GENERAL INSANO V3 (SLIM EDITION - MAXIMUM OVERCLOCK) >-<
-local LP = game:GetService("Players").LocalPlayer
+local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+
+local LP = Players.LocalPlayer
 
 local ZAP
 pcall(function() ZAP = require(game:GetService("ReplicatedStorage").Client.ClientRemotes) end)
 
-if LP.PlayerGui:FindFirstChild("CookDieGod") then LP.PlayerGui.CookDieGod:Destroy() end
+local KA_NORMAL_POR_SEG = 240
+local KA_BOSS_POR_SEG   = 840
+local KA_DEFESA_POR_SEG = 20
+local DISTANCIA_MAX = 50
+local DISTANCIA_DEFESA = 120
 
-local sg = Instance.new("ScreenGui", LP.PlayerGui)
+local CACHE_ATUALIZAR = 0.15
+local MAX_ALVOS_POR_TICK = 3
+
+if _G.InsanoHeartbeats then for _, hb in pairs(_G.InsanoHeartbeats) do pcall(function() hb:Disconnect() end) end end
+pcall(function() _G.InsanoRender:Disconnect() end)
+_G.KAThread = nil
+pcall(function() _G.PlataformaAtual:Destroy() end)
+pcall(function() _G.ConexaoPlataforma:Disconnect() end)
+pcall(function() _G.ConexaoInfJump:Disconnect() end)
+_G.InsanoHeartbeats = {}
+pcall(function() LP.PlayerGui.CookDieGod:Destroy() end)
+
+local sg = Instance.new("ScreenGui")
 sg.Name = "CookDieGod"
 sg.ResetOnSpawn = false
+sg.Parent = LP.PlayerGui
 
--- GUI REDUZIDA (Tamanho menor: 180x280)
-local main = Instance.new("Frame", sg)
-main.Size = UDim2.new(0, 180, 0, 280) 
+local main = Instance.new("Frame")
+main.Size = UDim2.new(0, 180, 0, 300)
 main.Position = UDim2.new(0.05, 0, 0.2, 0)
-main.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-main.Active = true 
-Instance.new("UICorner", main)
+main.BackgroundColor3 = Color3.fromRGB(5,5,5)
+main.Active = true
+main.Parent = sg
+Instance.new("UICorner", main).CornerRadius = UDim.new(0,10)
+local borda = Instance.new("UIStroke", main)
+borda.Thickness = 2
+borda.Color = Color3.fromRGB(180,60,255)
 
--- ARRASTAR
-local dragToggle, dragStart, startPos
-main.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragToggle, dragStart, startPos = true, input.Position, main.Position
+local titulo = Instance.new("TextLabel", main)
+titulo.Size = UDim2.new(0,162,0,20)
+titulo.Position = UDim2.new(0,9,0,4)
+titulo.BackgroundTransparency = 1
+titulo.Text = "COZINHE OU MORRA"
+titulo.TextColor3 = Color3.fromRGB(200,80,255)
+titulo.Font = Enum.Font.GothamBold
+titulo.TextSize = 14
+titulo.ZIndex = 3
+
+local subtitulo = Instance.new("TextLabel", main)
+subtitulo.Size = UDim2.new(0,162,0,14)
+subtitulo.Position = UDim2.new(0,9,0,24)
+subtitulo.BackgroundTransparency = 1
+subtitulo.Text = "Dev_Sophia"
+subtitulo.TextColor3 = Color3.fromRGB(140,140,140)
+subtitulo.Font = Enum.Font.Gotham
+subtitulo.TextSize = 9
+subtitulo.ZIndex = 3
+
+local btnMin = Instance.new("TextButton", main)
+btnMin.Size = UDim2.new(0, 24, 0, 24)
+btnMin.Position = UDim2.new(1, -30, 0, 3)
+btnMin.Text = "−"
+btnMin.BackgroundColor3 = Color3.fromRGB(140,40,220)
+btnMin.TextColor3 = Color3.new(1,1,1)
+btnMin.Font = Enum.Font.GothamBold
+btnMin.TextSize = 18
+btnMin.ZIndex = 5
+Instance.new("UICorner", btnMin).CornerRadius = UDim.new(0,6)
+
+local elementosOcultaveis = {}
+
+local function registrarOcultavel(el)
+    table.insert(elementosOcultaveis, el)
+end
+
+local drag = false
+local ds, sp
+main.InputBegan:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
+        drag = true
+        ds = i.Position
+        sp = main.Position
+        i.Changed:Connect(function()
+            if i.UserInputState == Enum.UserInputState.End then drag = false end
+        end)
     end
 end)
-UserInputService.InputChanged:Connect(function(input)
-    if dragToggle and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-        local delta = input.Position - dragStart
-        main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+UserInputService.InputChanged:Connect(function(i)
+    if drag and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then
+        main.Position = UDim2.new(
+            sp.X.Scale, sp.X.Offset + (i.Position.X - ds.X),
+            sp.Y.Scale, sp.Y.Offset + (i.Position.Y - ds.Y)
+        )
     end
 end)
-UserInputService.InputEnded:Connect(function(input) dragToggle = false end)
+UserInputService.InputEnded:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
+        drag = false
+    end
+end)
 
-local state = {
-    noclip = false,
-    killAura = false,
-    autoPullBodies = false
-}
+local minimizado = false
+btnMin.MouseButton1Click:Connect(function()
+    minimizado = not minimizado
+    if minimizado then
+        for _, el in ipairs(elementosOcultaveis) do el.Visible = false end
+        btnMin.Text = "+"
+        btnMin.BackgroundTransparency = 1
+        main.Size = UDim2.new(0, 180, 0, 36)
+    else
+        for _, el in ipairs(elementosOcultaveis) do el.Visible = true end
+        btnMin.Text = "−"
+        btnMin.BackgroundTransparency = 0
+        main.Size = UDim2.new(0, 180, 0, 300)
+    end
+end)
 
-local function createToggle(text, pos, stateKey, colorOn)
+local state = {noclip=false, kaModo=0, autoPullBodies=false, plat=0, infJump=false}
+
+local function createToggle(text, y, stateKey, corOn)
     local b = Instance.new("TextButton", main)
-    b.Size = UDim2.new(0.9, 0, 0, 35)
-    b.Position = pos
-    b.Text = text .. ": OFF"
-    b.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-    b.TextColor3 = Color3.new(1, 1, 1)
+    b.Size = UDim2.new(0,162,0,32)
+    b.Position = UDim2.new(0,9,0,y)
+    b.Text = text..": OFF"
+    b.BackgroundColor3 = Color3.fromRGB(12,12,12)
+    b.TextColor3 = Color3.new(1,1,1)
     b.Font = Enum.Font.GothamBold
     b.TextSize = 10
-    Instance.new("UICorner", b)
-
+    Instance.new("UICorner", b).CornerRadius = UDim.new(0,8)
+    Instance.new("UIStroke", b).Color = Color3.fromRGB(140,40,220)
     b.MouseButton1Click:Connect(function()
         state[stateKey] = not state[stateKey]
-        b.Text = state[stateKey] and (text .. ": ON") or (text .. ": OFF")
-        b.BackgroundColor3 = state[stateKey] and colorOn or Color3.fromRGB(40, 40, 40)
+        b.Text = text..(state[stateKey] and ": ON" or ": OFF")
+        b.BackgroundColor3 = state[stateKey] and corOn or Color3.fromRGB(12,12,12)
     end)
+    registrarOcultavel(b)
 end
 
--- BOTÕES
-local p1 = Instance.new("TextButton", main)
-p1.Size = UDim2.new(0.9, 0, 0, 35); p1.Position = UDim2.new(0.05, 0, 0.05, 0)
-p1.Text = "PUXAR TUDO"; p1.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
-p1.TextColor3 = Color3.new(1, 1, 1); p1.Font = Enum.Font.GothamBold; p1.TextSize = 10
-Instance.new("UICorner", p1)
-p1.MouseButton1Click:Connect(function()
-    if workspace:FindFirstChild("Interactables") then
-        for _, v in pairs(workspace.Interactables:GetChildren()) do
-            if v:IsA("Model") and v.PrimaryPart then
-                v.PrimaryPart.CFrame = LP.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, -4)
-            end
+local puxarTudo = Instance.new("TextButton", main)
+puxarTudo.Size = UDim2.new(0,162,0,32)
+puxarTudo.Position = UDim2.new(0,9,0,44)
+puxarTudo.Text = "PUXAR TUDO"
+puxarTudo.BackgroundColor3 = Color3.fromRGB(15,15,15)
+puxarTudo.TextColor3 = Color3.new(1,1,1)
+puxarTudo.Font = Enum.Font.GothamBold
+puxarTudo.TextSize = 10
+Instance.new("UICorner", puxarTudo).CornerRadius = UDim.new(0,8)
+puxarTudo.MouseButton1Click:Connect(function()
+    pcall(function()
+        if not LP.Character or not workspace:FindFirstChild("Interactables") then return end
+        local root = LP.Character.HumanoidRootPart
+        for _,v in pairs(workspace.Interactables:GetDescendants()) do
+            if v:IsA("Model") and v.PrimaryPart then v.PrimaryPart.CFrame = root.CFrame * CFrame.new(0,0,-4) end
         end
+    end)
+end)
+registrarOcultavel(puxarTudo)
+
+createToggle("PUXAR CORPOS", 80, "autoPullBodies", Color3.fromRGB(0,120,200))
+createToggle("NOCLIP", 116, "noclip", Color3.fromRGB(180,130,0))
+createToggle("INFINITY JUMP", 224, "infJump", Color3.fromRGB(200,100,0))
+
+local btnKA = Instance.new("TextButton", main)
+btnKA.Size = UDim2.new(0,162,0,32)
+btnKA.Position = UDim2.new(0,9,0,152)
+btnKA.Text = "KILL AURA: OFF"
+btnKA.BackgroundColor3 = Color3.fromRGB(40,0,0)
+btnKA.TextColor3 = Color3.new(1,1,1)
+btnKA.Font = Enum.Font.GothamBold
+btnKA.TextSize = 10
+Instance.new("UICorner", btnKA).CornerRadius = UDim.new(0,8)
+
+btnKA.MouseButton1Click:Connect(function()
+    state.kaModo = (state.kaModo + 1) % 4
+    if state.kaModo == 0 then btnKA.Text = "KILL AURA: OFF" btnKA.BackgroundColor3 = Color3.fromRGB(40,0,0) end
+    if state.kaModo == 1 then btnKA.Text = "KILL AURA: NORMAL" btnKA.BackgroundColor3 = Color3.fromRGB(180,0,0) end
+    if state.kaModo == 2 then btnKA.Text = "KILL AURA: BOSS" btnKA.BackgroundColor3 = Color3.fromRGB(90,0,0) end
+    if state.kaModo == 3 then btnKA.Text = "KILL AURA: DEFESA" btnKA.BackgroundColor3 = Color3.fromRGB(0,80,180) end
+end)
+registrarOcultavel(btnKA)
+
+local btnPlat = Instance.new("TextButton", main)
+btnPlat.Size = UDim2.new(0,162,0,32)
+btnPlat.Position = UDim2.new(0,9,0,188)
+btnPlat.Text = "PLATAFORMA"
+btnPlat.BackgroundColor3 = Color3.fromRGB(30,0,50)
+btnPlat.TextColor3 = Color3.new(1,1,1)
+btnPlat.Font = Enum.Font.GothamBold
+btnPlat.TextSize = 10
+Instance.new("UICorner", btnPlat).CornerRadius = UDim.new(0,8)
+
+btnPlat.MouseButton1Click:Connect(function()
+    state.plat = (state.plat + 1) % 3
+    if state.plat == 0 then
+        pcall(function() _G.PlataformaAtual:Destroy() end)
+        pcall(function() _G.ConexaoPlataforma:Disconnect() end)
+        btnPlat.Text = "PLATAFORMA"
+    elseif state.plat == 1 then
+        if not LP.Character then return end
+        local root = LP.Character.HumanoidRootPart
+        local p = Instance.new("Part")
+        p.Size = Vector3.new(8,1,8) p.Position = root.Position - Vector3.new(0,2,0)
+        p.Color = Color3.fromRGB(180,60,255) p.Material = Enum.Material.Neon
+        p.Anchored = true p.CanCollide = true p.Parent = workspace
+        _G.PlataformaAtual = p
+        _G.ConexaoPlataforma = RunService.Heartbeat:Connect(function(d)
+            pcall(function() p.Position += Vector3.new(0,3*d,0) end)
+        end)
+        btnPlat.Text = "PLATAFORMA: SUBINDO"
+    else
+        pcall(function() _G.ConexaoPlataforma:Disconnect() end)
+        btnPlat.Text = "PLATAFORMA: PARADA"
     end
 end)
+registrarOcultavel(btnPlat)
 
-createToggle("PUXAR CORPOS", UDim2.new(0.05, 0, 0.22, 0), "autoPullBodies", Color3.fromRGB(0, 120, 200))
-createToggle("NOCLIP", UDim2.new(0.05, 0, 0.39, 0), "noclip", Color3.fromRGB(180, 130, 0))
-createToggle("KILL AURA", UDim2.new(0.05, 0, 0.56, 0), "killAura", Color3.fromRGB(180, 0, 0))
-
-local close = Instance.new("TextButton", main)
-close.Size = UDim2.new(0.9, 0, 0, 35); close.Position = UDim2.new(0.05, 0, 0.82, 0)
-close.Text = "FECHAR"; close.BackgroundColor3 = Color3.fromRGB(120, 0, 0)
-close.TextColor3 = Color3.new(1, 1, 1); Instance.new("UICorner", close)
-close.MouseButton1Click:Connect(function() sg:Destroy() end)
-
--- DETECÇÃO OTIMIZADA
-local function obterMonstros()
-    local lista = {}
-    if workspace:FindFirstChild("Monsters") then
-        for _, m in pairs(workspace.Monsters:GetChildren()) do table.insert(lista, m) end
-    end
-    for _, v in pairs(workspace:GetChildren()) do
-        if v:IsA("Model") and v:FindFirstChild("Humanoid") and v.Name ~= LP.Name and not v:FindFirstChild("CarriedBy") then
-            table.insert(lista, v)
+_G.ConexaoInfJump = RunService.Heartbeat:Connect(function()
+    pcall(function()
+        if not state.infJump then return end
+        if not LP.Character then return end
+        local hum = LP.Character:FindFirstChildOfClass("Humanoid")
+        if not hum then return end
+        hum:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
+        local st = hum:GetState()
+        if st == Enum.HumanoidStateType.Jumping or st == Enum.HumanoidStateType.Freefall then
+            hum:ChangeState(Enum.HumanoidStateType.Running)
         end
-    end
-    return lista
+    end)
+end)
+
+UserInputService.JumpRequest:Connect(function()
+    pcall(function()
+        if not state.infJump then return end
+        if not LP.Character then return end
+        local hum = LP.Character:FindFirstChildOfClass("Humanoid")
+        if not hum then return end
+        hum:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
+        hum:ChangeState(Enum.HumanoidStateType.Jumping)
+    end)
+end)
+
+local cacheMonstros = {}
+local tempoCache = 0
+
+local function ehChefe(m)
+    local hum = m:FindFirstChildOfClass("Humanoid")
+    if hum and hum.MaxHealth >= 500 then return true end
+    local nome = m.Name:lower()
+    return nome:find("boss") or nome:find("chefe") or nome:find("giant") or nome:find("titan")
 end
 
--- LOOP RENDERSTEPPED (Focado em Física e Hitbox)
-RunService.RenderStepped:Connect(function()
-    if not LP.Character or not LP.Character:FindFirstChild("HumanoidRootPart") then return end
-    local root = LP.Character.HumanoidRootPart
-
-    if state.autoPullBodies and workspace:FindFirstChild("Interactables") then
-        for _, v in pairs(workspace.Interactables:GetChildren()) do
-            if v:IsA("Model") and v:FindFirstChild("HumanoidRootPart") and not v:FindFirstChild("ProductPriceTag") then
-                v.HumanoidRootPart.CFrame = root.CFrame * CFrame.new(0, 0, -2.5)
-            end
-        end
-    end
-
-    local monstros = obterMonstros()
-    for _, m in pairs(monstros) do
-        local eRoot = m:FindFirstChild("HumanoidRootPart") or m:FindFirstChild("Torso")
-        if eRoot and eRoot:IsA("BasePart") then
-            local dist = (root.Position - eRoot.Position).Magnitude
-            if state.killAura and dist < 45 then
-                eRoot.Size = Vector3.new(25, 25, 25)
-                eRoot.Transparency = 0.7
-                eRoot.CanCollide = false
-            else
-                if eRoot.Size.X > 5 then 
-                    eRoot.Size = Vector3.new(2, 2, 1) 
-                    eRoot.Transparency = 1 
-                end
-            end
-        end
-    end
-
-    if state.noclip then
-        for _, v in pairs(LP.Character:GetDescendants()) do if v:IsA("BasePart") then v.CanCollide = false end end
-    end
-end)
-
--- LOOP HEARTBEAT (Executa rajadas de eventos remotos acoplados aos frames físicos)
-RunService.Heartbeat:Connect(function()
-    if state.killAura and LP.Character and ZAP then
-        local root = LP.Character:FindFirstChild("HumanoidRootPart")
-        if root then
-            local monstros = obterMonstros()
-            for _, m in pairs(monstros) do
-                local eRoot = m:FindFirstChild("HumanoidRootPart") or m:FindFirstChild("Torso")
-                if eRoot then
-                    local dist = (root.Position - eRoot.Position).Magnitude
-                    if dist < 45 then
-                        -- Loop interno forçado: dispara o mesmo sinal 3 vezes consecutivas por frame físico
-                        for i = 1, 3 do
-                            pcall(function() ZAP.meleeAttack.fire({monsters = {m}, civilians = {}, activeSlot = 1}) end)
-                            pcall(function() ZAP.meleeAttack.fire({monsters = {m}, civilians = {}, activeSlot = 2}) end)
-                            pcall(function() ZAP.meleeAttack:FireServer({monsters = {m}, civilians = {}, activeSlot = 2}) end)
-                        end
+local function atualizarCacheMonstros()
+    cacheMonstros = {}
+    pcall(function()
+        if workspace:FindFirstChild("Monsters") then
+            for _,m in pairs(workspace.Monsters:GetChildren()) do
+                if m:IsA("Model") and not Players:GetPlayerFromCharacter(m) then
+                    local eRoot = m:FindFirstChild("HumanoidRootPart") or m:FindFirstChild("Torso")
+                    if eRoot then
+                        table.insert(cacheMonstros, {
+                            model = m,
+                            root = eRoot,
+                            chefe = ehChefe(m)
+                        })
                     end
                 end
             end
         end
-    end
+        for _,v in pairs(workspace:GetChildren()) do
+            if v:IsA("Model") and v:FindFirstChildOfClass("Humanoid") and v~=LP.Character and not Players:GetPlayerFromCharacter(v) then
+                local eRoot = v:FindFirstChild("HumanoidRootPart") or v:FindFirstChild("Torso")
+                if eRoot then
+                    local jaExiste = false
+                    for _,d in ipairs(cacheMonstros) do
+                        if d.model == v then jaExiste = true break end
+                    end
+                    if not jaExiste then
+                        table.insert(cacheMonstros, {
+                            model = v,
+                            root = eRoot,
+                            chefe = ehChefe(v)
+                        })
+                    end
+                end
+            end
+        end
+    end)
+end
+
+local acumuladorAtaques = 0
+local tempoDesdeCache = 0
+
+_G.KAThread = RunService.Heartbeat:Connect(function(deltaTime)
+    pcall(function()
+        if state.kaModo == 0 or not LP.Character or not LP.Character:FindFirstChild("HumanoidRootPart") or not ZAP then
+            acumuladorAtaques = 0
+            return
+        end
+
+        local root = LP.Character.HumanoidRootPart
+        local minhaPos = root.Position
+
+        local porSeg, alcance
+        if state.kaModo == 1 then
+            porSeg = KA_NORMAL_POR_SEG
+            alcance = DISTANCIA_MAX
+        elseif state.kaModo == 2 then
+            porSeg = KA_BOSS_POR_SEG
+            alcance = DISTANCIA_MAX
+        else
+            porSeg = KA_DEFESA_POR_SEG
+            alcance = DISTANCIA_DEFESA
+        end
+
+        tempoDesdeCache = tempoDesdeCache + deltaTime
+        if tempoDesdeCache >= CACHE_ATUALIZAR then
+            atualizarCacheMonstros()
+            tempoDesdeCache = 0
+        end
+
+        acumuladorAtaques = acumuladorAtaques + (porSeg * deltaTime)
+        local qtdAtacar = math.floor(acumuladorAtaques)
+        acumuladorAtaques = acumuladorAtaques - qtdAtacar
+
+        if qtdAtacar <= 0 then return end
+
+        local alvosProximos = {}
+        for _, dados in ipairs(cacheMonstros) do
+            local m = dados.model
+            local eRoot = dados.root
+            if eRoot and eRoot.Parent and m.Parent then
+                local dist = (minhaPos - eRoot.Position).Magnitude
+                if dist < alcance then
+                    table.insert(alvosProximos, {
+                        dados = dados,
+                        dist = dist
+                    })
+                end
+            end
+        end
+
+        table.sort(alvosProximos, function(a, b)
+            if a.dados.chefe ~= b.dados.chefe then
+                return a.dados.chefe
+            end
+            return a.dist < b.dist
+        end)
+
+        local processados = 0
+        for _, alvo in ipairs(alvosProximos) do
+            if processados >= MAX_ALVOS_POR_TICK then break end
+            processados = processados + 1
+
+            local m = alvo.dados.model
+            for _ = 1, qtdAtacar do
+                pcall(function() ZAP.meleeAttack.fire({monsters={m}, civilians={}, activeSlot=1}) end)
+            end
+        end
+    end)
 end)
+
+table.insert(_G.InsanoHeartbeats, _G.KAThread)
+
+_G.InsanoRender = RunService.Heartbeat:Connect(function()
+    pcall(function()
+        if not LP.Character or not LP.Character:FindFirstChild("HumanoidRootPart") then return end
+        local root = LP.Character.HumanoidRootPart
+
+        if state.autoPullBodies and workspace:FindFirstChild("Interactables") then
+            for _,v in pairs(workspace.Interactables:GetChildren()) do
+                if v:IsA("Model") and v:FindFirstChild("HumanoidRootPart") then
+                    v.HumanoidRootPart.CFrame = root.CFrame * CFrame.new(0,0,-2.5)
+                end
+            end
+        end
+
+        if state.noclip then
+            for _,v in pairs(LP.Character:GetDescendants()) do
+                if v:IsA("BasePart") then v.CanCollide = false end
+            end
+        end
+    end)
+end)
+
+table.insert(_G.InsanoHeartbeats, _G.InsanoRender)
